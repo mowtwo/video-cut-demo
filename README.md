@@ -2,8 +2,10 @@
 
 面向**非专业用户**的本地自动视频混剪工具。上传视频 → 自动分割素材 → 选混剪模板 → ffmpeg 拼接出片 →（可选 AI 优化 / 自动字幕）→ 预览下载。全程本地可跑、可调试，AI 等重依赖一律可选且自动降级。
 
-> 🎬 **演示视频**：[`demo.mp4`](./demo.mp4)（GitHub 上点开可在线播放）
->
+**🎬 演示视频**（点击封面播放）：
+
+[![演示视频](./demo-poster.jpg)](./demo.mp4)
+
 > 架构与详设：[`docs/DESIGN.md`](docs/DESIGN.md)　·　开发进度：[`docs/PROGRESS.md`](docs/PROGRESS.md)
 
 ---
