@@ -1,0 +1,25 @@
+# 本地编排。M0 阶段仅 asr 为现成可用镜像；api/render/web 的 Dockerfile 待后续补，
+# 本地开发主路径是 `pnpm dev`(web+api) + `pnpm render:dev`(go)，不依赖 docker。
+services:
+  # 可选的字幕服务 (faster-whisper)。不需要字幕时无需启动。
+  asr:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: ${ASR_MODEL:-large-v3}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./data/asr-cache:/root/.cache # 模型缓存，避免重复下载
+    restart: unless-stopped
+
+  # TODO(后续): api / render / web 的 Dockerfile + service 定义
+  # render:
+  #   build: ./svc/render
+  #   ports: ["8790:8790"]
+  #   volumes: ["./data:/data"]
+  # api:
+  #   build: ./apps/api
+  #   ports: ["8787:8787"]
+  #   depends_on: [render]
+  #   volumes: ["./data:/data"]

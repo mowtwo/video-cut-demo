@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "svc/*"
+
+# 允许这些依赖运行安装构建脚本 (pnpm 默认拦截)
+allowBuilds:
+  esbuild: true

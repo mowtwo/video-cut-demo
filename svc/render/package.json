@@ -1,0 +1,12 @@
+{
+  "name": "@vcd/render",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Go ffmpeg microservice — package.json is a turbo shim that shells out to go",
+  "scripts": {
+    "dev": "go run .",
+    "build": "go build -o bin/render .",
+    "typecheck": "go vet ./...",
+    "lint": "gofmt -l ."
+  }
+}

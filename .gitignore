@@ -1,0 +1,33 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# go
+svc/render/bin/
+svc/render/render
+
+# runtime data (media, sqlite, outputs)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# env
+.env
+.env.local
+*.local
+
+# logs
+*.log
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
