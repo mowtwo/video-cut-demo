@@ -31,6 +31,7 @@ export function createProject(title: string, aspect: AspectRatio): Project {
     templateId: null,
     aspect,
     status: "draft",
+    bgmPath: null,
     createdAt: now(),
     updatedAt: now(),
   };
@@ -61,6 +62,10 @@ export function updateProject(
     .run(next.title, next.templateId, next.aspect, next.status, next.updatedAt, id);
 }
 
+export function setProjectBgm(id: string, bgmPath: string | null): void {
+  db().prepare("UPDATE projects SET bgm_path=?, updated_at=? WHERE id=?").run(bgmPath, now(), id);
+}
+
 function rowToProject(r: any): Project {
   return {
     id: r.id,
@@ -68,6 +73,7 @@ function rowToProject(r: any): Project {
     templateId: r.template_id,
     aspect: r.aspect,
     status: r.status as ProjectStatus,
+    bgmPath: r.bgm_path ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

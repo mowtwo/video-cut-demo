@@ -27,6 +27,11 @@ export const MIGRATIONS: Migration[] = [
     name: "init",
     up: SCHEMA_SQL,
   },
+  {
+    version: 2,
+    name: "projects_add_bgm_path",
+    up: `ALTER TABLE projects ADD COLUMN bgm_path TEXT;`,
+  },
   // ↓ 后续改表在此追加，version 严格递增；不要改动上面已存在的迁移
 ];
 

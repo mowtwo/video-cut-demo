@@ -9,7 +9,7 @@ import { absPath, config, fileUrl, paths } from "./config.js";
 import {
   createProject, createRender, enqueueJob, eventsSince, getAnalysis, getProject,
   getRender, listClips, listRenders, listSources, newId, saveAnalysis, setClipIncluded,
-  setClipOrder, createSource, getSource, setJobProgress, updateProject,
+  setClipOrder, createSource, getSource, setJobProgress, setProjectBgm, updateProject,
 } from "./db.js";
 import { renderClient } from "./render-client.js";
 import { compile, TEMPLATES } from "./templates.js";
@@ -44,7 +44,7 @@ export function registerRoutes(app: Hono) {
     const p = getProject(id);
     if (!p) return c.json({ error: "not found" }, 404);
     return c.json({
-      project: p,
+      project: { ...p, bgmUrl: fileUrl(p.bgmPath) },
       sources: listSources(id).map(sourceDTO),
       clips: listClips(id).map(clipDTO),
       renders: listRenders(id).map(renderDTO),
@@ -84,6 +84,27 @@ export function registerRoutes(app: Hono) {
   app.get("/projects/:id/sources", (c) =>
     c.json(listSources(c.req.param("id")).map(sourceDTO)),
   );
+
+  // ---- 配乐：上传 / 清除 ----
+  app.post("/projects/:id/bgm", async (c) => {
+    const id = c.req.param("id");
+    if (!getProject(id)) return c.json({ error: "project not found" }, 404);
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    if (!(file instanceof File)) return c.json({ error: "no file" }, 400);
+    const ext = extname(file.name) || ".mp3";
+    const rel = `assets/bgm-${id}${ext}`;
+    await mkdir(paths.assets(), { recursive: true });
+    await writeFile(absPath(rel), Buffer.from(await file.arrayBuffer()));
+    setProjectBgm(id, rel);
+    saveAnalysis(id, null, "beat", []); // 失效旧节拍，下次渲染重测
+    return c.json({ bgmPath: rel, bgmUrl: fileUrl(rel) });
+  });
+
+  app.delete("/projects/:id/bgm", (c) => {
+    setProjectBgm(c.req.param("id"), null);
+    return c.json({ ok: true });
+  });
 
   // ---- 自动分割 ----
   app.post("/projects/:id/segment", (c) => {
@@ -175,16 +196,23 @@ async function doRender(c: any, regenerate = false) {
   const sources = sourcesRel.map((s) => ({ ...s, path: absPath(s.path) }));
   const clips = listClips(id);
 
-  // BGM（可选）：data/assets/bgm.mp3 存在则启用
-  const bgmRel = "assets/bgm.mp3";
-  const bgmAbs = absPath(bgmRel);
-  const hasBgm = existsSync(bgmAbs);
+  // BGM 解析优先级：noMusic 强制无 > 工程上传的配乐 > 全局 assets/bgm.mp3 > 无(用原声)
+  const noMusic = !!body.noMusic;
+  let bgmAbs: string | null = null;
+  if (!noMusic) {
+    if (project.bgmPath && existsSync(absPath(project.bgmPath))) {
+      bgmAbs = absPath(project.bgmPath);
+    } else if (existsSync(absPath("assets/bgm.mp3"))) {
+      bgmAbs = absPath("assets/bgm.mp3");
+    }
+  }
+  const hasBgm = !!bgmAbs;
   let beats: number[] = [];
   if (hasBgm && TEMPLATES[templateId].audio.useBgm) {
     beats = (getAnalysis(id, "beat") as number[]) ?? [];
     if (!beats.length) {
       try {
-        const r = await renderClient.beat(bgmAbs);
+        const r = await renderClient.beat(bgmAbs!);
         beats = r.beatsMs;
         saveAnalysis(id, null, "beat", beats);
       } catch { beats = []; }

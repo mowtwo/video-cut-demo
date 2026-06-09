@@ -66,6 +66,15 @@ export function canvasFor(aspect: AspectRatio, sources: Source[]): { w: number; 
   return { w, h, fps };
 }
 
+// 相邻节拍间隔的中位数(ms)；少于 2 个节拍返回 0
+function medianGap(beatsMs: number[]): number {
+  if (!beatsMs || beatsMs.length < 2) return 0;
+  const gaps: number[] = [];
+  for (let i = 1; i < beatsMs.length; i++) gaps.push(beatsMs[i] - beatsMs[i - 1]);
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)] || 0;
+}
+
 // 种子随机（mulberry32），让 regenerate 产生差异
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -100,26 +109,29 @@ export function compile(opts: CompileOpts): RenderSpec {
   const selected = select(tpl, usable, srcMap, rand);
 
   // ---- 节奏：决定每段时长 ----
+  // 每段目标时长 = 模板设定的镜头长度(fallbackSegMs)。
+  // beat_sync 时把它「吸附」到整数个节拍间隔上（这样切点落在节拍上，但镜头仍是可看的 1~3s，
+  // 而不是每个节拍切一刀变成 0.5s 的碎片）。
   const useBgm = tpl.audio.useBgm && !!opts.bgmPath;
   const beats = opts.beats ?? [];
+  const beatIntervalMs = medianGap(beats); // 0 表示无节拍
+  const targetSeg = tpl.pacing.fallbackSegMs;
+  const MIN_SEG = 700;
+
   const segs: Segment[] = [];
   let cursor = 0;
-  let beatIdx = 0;
 
   for (let i = 0; i < selected.length; i++) {
     const c = selected[i];
     const src = srcMap.get(c.sourceId)!;
 
-    let durMs: number;
-    if (tpl.pacing.mode === "beat_sync" && beats.length > 1) {
-      const a = beats[Math.min(beatIdx, beats.length - 1)];
-      const b = beats[Math.min(beatIdx + tpl.pacing.beatsPerCut, beats.length - 1)];
-      beatIdx += tpl.pacing.beatsPerCut;
-      durMs = Math.max(400, Math.round((b - a) || tpl.pacing.fallbackSegMs));
-    } else {
-      durMs = tpl.pacing.fallbackSegMs;
+    let durMs = targetSeg;
+    if (tpl.pacing.mode === "beat_sync" && beatIntervalMs > 0) {
+      const nBeats = Math.max(1, Math.round(targetSeg / beatIntervalMs));
+      durMs = nBeats * beatIntervalMs; // 整数个节拍 → 卡点
     }
     durMs = Math.min(durMs, c.durationMs); // 不超过该 clip 实际长度
+    durMs = Math.max(durMs, Math.min(MIN_SEG, c.durationMs)); // 但别太碎
 
     const seg: Segment = {
       clipId: c.id,

@@ -8,6 +8,7 @@ export const Project = z.object({
   templateId: z.string().nullable(),
   aspect: AspectRatio.default("original"),
   status: ProjectStatus,
+  bgmPath: z.string().nullable().default(null), // 工程配乐(相对路径)，null=用原声
   createdAt: z.number(),
   updatedAt: z.number(),
 });

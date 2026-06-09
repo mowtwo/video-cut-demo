@@ -162,10 +162,12 @@ export function App() {
           )}
           {step === 2 && (
             <Template
+              projectId={projectId}
+              bundle={bundle}
               templates={templates}
               caps={caps}
-              defaultTitle={bundle.project.title}
               onGenerate={(opts) => generate(opts)}
+              refresh={refresh}
             />
           )}
           {step === 3 && <Generate progress={gen.progress} message={gen.message} />}

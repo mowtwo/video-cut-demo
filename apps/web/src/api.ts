@@ -11,7 +11,7 @@ export type RenderDTO = Render & {
 };
 
 export interface ProjectBundle {
-  project: Project;
+  project: Project & { bgmUrl?: string | null };
   sources: SourceDTO[];
   clips: ClipDTO[];
   renders: RenderDTO[];
@@ -55,6 +55,17 @@ export const api = {
 
   segment: (id: string) =>
     fetch(`${base}/projects/${id}/segment`, { method: "POST" }).then(j<{ jobId: string }>),
+
+  uploadBgm: (id: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`${base}/projects/${id}/bgm`, { method: "POST", body: form }).then(
+      j<{ bgmPath: string; bgmUrl: string }>,
+    );
+  },
+
+  clearBgm: (id: string) =>
+    fetch(`${base}/projects/${id}/bgm`, { method: "DELETE" }).then(j),
 
   reorderClips: (id: string, orderedIds: string[]) =>
     fetch(`${base}/projects/${id}/clips/reorder`, {
