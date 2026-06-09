@@ -33,15 +33,21 @@ export async function transcribe(absInputPath: string): Promise<AsrSegment[]> {
 
 /** 分段 -> ASS 文件（带基础样式，CJK 友好）。返回写入的绝对路径。 */
 export async function writeAss(absOutPath: string, segs: AsrSegment[], playResX = 1080, playResY = 1920): Promise<string> {
+  // WrapStyle 0 = 智能自动换行（行宽大致均衡），避免长句被画面边缘截断。
+  // 字号/边距按画幅自适应；底部居中，留足左右与底部边距。
+  const fontSize = Math.round(playResX * 0.046);
+  const marginLR = Math.round(playResX * 0.07);
+  const marginV = Math.round(playResY * 0.09);
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${playResX}
 PlayResY: ${playResY}
-WrapStyle: 2
+WrapStyle: 0
+ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV
-Style: Default,Noto Sans CJK SC,${Math.round(playResX * 0.05)},&H00FFFFFF,&H00000000,&H64000000,1,1,3,1,2,60,60,${Math.round(playResY * 0.08)}
+Style: Default,Noto Sans CJK SC,${fontSize},&H00FFFFFF,&H00000000,&H64000000,1,1,3,1,2,${marginLR},${marginLR},${marginV}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

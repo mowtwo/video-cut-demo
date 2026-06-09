@@ -97,6 +97,21 @@ export interface CompileOpts {
   bgmPath?: string | null;
   assPath?: string | null;
   seed?: number;
+  audioMode?: "mix" | "bgm" | "original"; // 混合 / 仅配乐 / 仅原声
+  bgmVolume?: number; // 配乐音量百分比(100=原始)
+  originalVolume?: number; // 原声音量百分比
+  titleStyle?: {
+    pos?: "top" | "center" | "bottom";
+    durationSec?: number;
+    sizePct?: number; // 占画面宽度百分比(默认 7.5)
+    color?: string;
+  };
+}
+
+// 音量百分比 -> dB（100%→0dB）
+function pctToDb(pct: number | undefined): number {
+  const p = Math.max(1, pct ?? 100) / 100;
+  return Math.round(20 * Math.log10(p) * 10) / 10;
 }
 
 export function compile(opts: CompileOpts): RenderSpec {
@@ -112,7 +127,9 @@ export function compile(opts: CompileOpts): RenderSpec {
   // 每段目标时长 = 模板设定的镜头长度(fallbackSegMs)。
   // beat_sync 时把它「吸附」到整数个节拍间隔上（这样切点落在节拍上，但镜头仍是可看的 1~3s，
   // 而不是每个节拍切一刀变成 0.5s 的碎片）。
-  const useBgm = tpl.audio.useBgm && !!opts.bgmPath;
+  // 用户显式选的 audioMode 优先于模板默认：只要选了 mix/bgm 且有配乐就用配乐
+  const audioMode = opts.audioMode ?? "bgm";
+  const useBgm = !!opts.bgmPath && audioMode !== "original";
   const beats = opts.beats ?? [];
   const beatIntervalMs = medianGap(beats); // 0 表示无节拍
   const targetSeg = tpl.pacing.fallbackSegMs;
@@ -157,20 +174,22 @@ export function compile(opts: CompileOpts): RenderSpec {
   // ---- 文字图层 ----
   const textLayers: TextLayer[] = [];
   if (tpl.style.title.enabled && opts.title) {
-    const pos = tpl.style.title.pos;
+    const ts = opts.titleStyle ?? {};
+    const pos = ts.pos ?? tpl.style.title.pos;
     const y = pos === "top" ? "h*0.10" : pos === "bottom" ? "h*0.82" : "(h-th)/2";
+    const endMs = Math.min(Math.round((ts.durationSec ?? 2.6) * 1000), totalMs);
     textLayers.push({
       kind: "title",
       content: opts.title,
       startMs: 200,
-      endMs: Math.min(2800, totalMs),
+      endMs: Math.max(endMs, 800),
       style: {
         font: "NotoSansCJKsc",
-        size: Math.round(canvas.w * 0.075),
+        size: Math.round((canvas.w * (ts.sizePct ?? 7.5)) / 100),
         x: "(w-tw)/2",
         y,
         anim: "grow_fadein",
-        color: "white",
+        color: ts.color ?? "white",
       },
     });
   }
@@ -181,7 +200,13 @@ export function compile(opts: CompileOpts): RenderSpec {
   return {
     canvas,
     bgm: useBgm
-      ? { src: opts.bgmPath!, gainDb: tpl.audio.duckOriginal ? -2 : 0, beats: beats.map((b) => b / 1000) }
+      ? {
+          src: opts.bgmPath!,
+          gainDb: pctToDb(opts.bgmVolume),
+          mixOriginal: audioMode === "mix",
+          originalGainDb: pctToDb(opts.originalVolume),
+          beats: beats.map((b) => b / 1000),
+        }
       : null,
     segments: segs.length > 0 ? segs : fallbackSegment(opts, canvas),
     textLayers,

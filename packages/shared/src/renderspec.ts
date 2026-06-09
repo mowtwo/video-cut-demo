@@ -33,6 +33,10 @@ export const Canvas = z.object({
 export const Bgm = z.object({
   src: z.string(),
   gainDb: z.number().default(-3),
+  /** 是否同时混入视频原声(true=配乐+原声混合, false=仅配乐) */
+  mixOriginal: z.boolean().default(false),
+  /** 混入时原声的增益(dB) */
+  originalGainDb: z.number().default(0),
   /** 节拍时间戳(秒)，卡点用；无卡点时为空 */
   beats: z.array(z.number()).default([]),
 });

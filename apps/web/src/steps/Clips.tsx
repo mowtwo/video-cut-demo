@@ -21,8 +21,12 @@ export function Clips({
 
   useEffect(() => setClips(bundle.clips), [bundle.clips]);
 
+  // 进入时若还没分割、或有新素材尚无对应 clips，自动(重新)分割
   useEffect(() => {
-    if (bundle.clips.length === 0 && !segmenting) void runSegment();
+    const hasNewSource = bundle.sources.some(
+      (s) => !bundle.clips.some((c) => c.sourceId === s.id),
+    );
+    if ((bundle.clips.length === 0 || hasNewSource) && !segmenting) void runSegment();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

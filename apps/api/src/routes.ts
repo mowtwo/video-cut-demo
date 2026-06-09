@@ -219,10 +219,14 @@ async function doRender(c: any, regenerate = false) {
   const sources = sourcesRel.map((s) => ({ ...s, path: absPath(s.path) }));
   const clips = listClips(id);
 
-  // BGM 解析优先级：noMusic 强制无 > 工程上传的配乐 > 全局 assets/bgm.mp3 > 无(用原声)
-  const noMusic = !!body.noMusic;
+  // 音频模式：mix=配乐+原声混合 / bgm=仅配乐 / original=仅原声
+  const audioMode: "mix" | "bgm" | "original" = body.audioMode ?? (body.noMusic ? "original" : "bgm");
+  const bgmVolume = body.bgmVolume;
+  const originalVolume = body.originalVolume;
+
+  // BGM 解析：original 模式不加配乐 > 工程上传的配乐 > 全局 assets/bgm.mp3 > 无
   let bgmAbs: string | null = null;
-  if (!noMusic) {
+  if (audioMode !== "original") {
     if (project.bgmPath && existsSync(absPath(project.bgmPath))) {
       bgmAbs = absPath(project.bgmPath);
     } else if (existsSync(absPath("assets/bgm.mp3"))) {
@@ -245,6 +249,7 @@ async function doRender(c: any, regenerate = false) {
   let spec = compile({
     templateId, aspect, clips, sources, beats,
     title: project.title, bgmPath: hasBgm ? bgmAbs : null, assPath: null, seed,
+    audioMode, bgmVolume, originalVolume, titleStyle: body.titleStyle,
   });
 
   let aiRefined = false;

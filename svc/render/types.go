@@ -23,9 +23,11 @@ type Canvas struct {
 }
 
 type Bgm struct {
-	Src    string    `json:"src"`
-	GainDb float64   `json:"gainDb"`
-	Beats  []float64 `json:"beats"`
+	Src            string    `json:"src"`
+	GainDb         float64   `json:"gainDb"`
+	MixOriginal    bool      `json:"mixOriginal"`
+	OriginalGainDb float64   `json:"originalGainDb"`
+	Beats          []float64 `json:"beats"`
 }
 
 type Transform struct {

@@ -128,7 +128,8 @@ func buildRenderArgs(spec *RenderSpec, out string) ([]string, int64, func(), err
 	}
 
 	// 预估时长 & 是否走 xfade
-	useXfade := spec.Bgm != nil && allHaveTransition(spec.Segments)
+	// 混入原声时强制硬切(concat)，避免 xfade 让视频变短而原声音轨错位。
+	useXfade := spec.Bgm != nil && allHaveTransition(spec.Segments) && !spec.Bgm.MixOriginal
 	totalMs := estimateTotalMs(spec.Segments, useXfade)
 
 	// ---- 视频拼接 ----
@@ -155,23 +156,18 @@ func buildRenderArgs(spec *RenderSpec, out string) ([]string, int64, func(), err
 	tmpFiles = append(tmpFiles, textTmp...)
 
 	// ---- 音频 ----
+	// 三种情况：无 bgm=原声；有 bgm 且 mixOriginal=配乐+原声混合；有 bgm 不混=仅配乐。
+	mixOriginal := spec.Bgm != nil && spec.Bgm.MixOriginal
+	needOriginal := spec.Bgm == nil || mixOriginal
 	var amap string
-	if spec.Bgm != nil {
-		idx := len(spec.Segments) // bgm 输入索引
-		inputs = append(inputs,
-			"-t", fmt.Sprintf("%.3f", float64(totalMs)/1000.0),
-			"-i", spec.Bgm.Src,
-		)
-		fc = append(fc, fmt.Sprintf("[%d:a]volume=%.1fdB,aresample=44100[aout]", idx, spec.Bgm.GainDb))
-		amap = "[aout]"
-	} else {
-		// 用每段原声拼接；缺音轨的段用 anullsrc 在图内补静音
+
+	if needOriginal {
+		// 每段原声 -> [a{i}] -> concat -> [aorig]（缺音轨的段用 anullsrc 补静音）
 		for i, seg := range spec.Segments {
 			dur := float64(seg.SrcDurMs) / 1000.0 / nonZero(seg.Speed)
 			pr, _ := probeCached(seg.Src)
 			if pr != nil && pr.HasAudio {
-				sp := nonZero(seg.Speed)
-				fc = append(fc, fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,atempo=%.3f,aresample=44100[a%d]", i, sp, i))
+				fc = append(fc, fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,atempo=%.3f,aresample=44100[a%d]", i, nonZero(seg.Speed), i))
 			} else {
 				fc = append(fc, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=0:%.3f,asetpts=PTS-STARTPTS[a%d]", dur, i))
 			}
@@ -180,9 +176,27 @@ func buildRenderArgs(spec *RenderSpec, out string) ([]string, int64, func(), err
 		for i := 0; i < n; i++ {
 			b.WriteString(fmt.Sprintf("[a%d]", i))
 		}
-		b.WriteString(fmt.Sprintf("concat=n=%d:v=0:a=1[aout]", n))
+		b.WriteString(fmt.Sprintf("concat=n=%d:v=0:a=1[aorig]", n))
 		fc = append(fc, b.String())
-		amap = "[aout]"
+	}
+
+	if spec.Bgm != nil {
+		idx := len(spec.Segments) // bgm 输入索引
+		inputs = append(inputs,
+			"-t", fmt.Sprintf("%.3f", float64(totalMs)/1000.0),
+			"-i", spec.Bgm.Src,
+		)
+		fc = append(fc, fmt.Sprintf("[%d:a]volume=%.1fdB,aresample=44100[abgm]", idx, spec.Bgm.GainDb))
+		if mixOriginal {
+			fc = append(fc, fmt.Sprintf("[aorig]volume=%.1fdB[aorigv]", spec.Bgm.OriginalGainDb))
+			// normalize=0 保留各自设定音量；longest 覆盖整段
+			fc = append(fc, "[abgm][aorigv]amix=inputs=2:duration=longest:normalize=0[aout]")
+			amap = "[aout]"
+		} else {
+			amap = "[abgm]"
+		}
+	} else {
+		amap = "[aorig]"
 	}
 
 	// ---- 组装 args ----
@@ -285,6 +299,9 @@ func applyTextLayers(layers []TextLayer, vin string) (string, []string, []string
 			color := l.Style.Color
 			if color == "" {
 				color = "white"
+			}
+			if strings.HasPrefix(color, "#") {
+				color = "0x" + color[1:] // ffmpeg drawtext 用 0xRRGGBB
 			}
 			s := float64(l.StartMs) / 1000.0
 			e := float64(l.EndMs) / 1000.0
