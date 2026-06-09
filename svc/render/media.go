@@ -43,7 +43,7 @@ func thumbnailHandler(c *gin.Context) {
 		req.Out,
 	}
 	logFFmpegCmd(args)
-	if _, err := runOut("ffmpeg", args...); err != nil {
+	if _, err := runOut(ffmpegBin, args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -75,7 +75,7 @@ func sceneHandler(c *gin.Context) {
 		"-an", "-f", "null", "-",
 	}
 	logFFmpegCmd(args)
-	out, err := runCombined("ffmpeg", args...)
+	out, err := runCombined(ffmpegBin, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

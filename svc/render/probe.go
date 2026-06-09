@@ -50,7 +50,7 @@ func probeHandler(c *gin.Context) {
 }
 
 func probe(path string) (*ProbeResult, error) {
-	out, err := runOut("ffprobe", "-v", "quiet",
+	out, err := runOut(ffprobeBin, "-v", "quiet",
 		"-print_format", "json", "-show_format", "-show_streams", path)
 	if err != nil {
 		return nil, err

@@ -18,8 +18,17 @@ import (
 // 重型 ffmpeg 任务的并发闸（避免 CPU 过订阅）。
 var heavySem chan struct{}
 
+// ffmpeg / ffprobe 可执行文件路径（可用 FFMPEG_BIN/FFPROBE_BIN 指向全功能构建，
+// 如 keg-only 的 ffmpeg-full，而不影响系统默认 ffmpeg）。
+var (
+	ffmpegBin  = "ffmpeg"
+	ffprobeBin = "ffprobe"
+)
+
 func main() {
 	port := getenv("RENDER_PORT", "8790")
+	ffmpegBin = getenv("FFMPEG_BIN", "ffmpeg")
+	ffprobeBin = getenv("FFPROBE_BIN", "ffprobe")
 
 	maxConc := envInt("RENDER_MAX_CONCURRENT", 0)
 	if maxConc <= 0 {
@@ -40,8 +49,8 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"ok":      true,
 			"service": "render",
-			"ffmpeg":  hasBin("ffmpeg"),
-			"ffprobe":  hasBin("ffprobe"),
+			"ffmpeg":   hasBin(ffmpegBin),
+			"ffprobe":  hasBin(ffprobeBin),
 			"aubio":    hasBin("aubiotrack"),
 			"drawtext": hasDrawtext,
 			"ass":      hasAss,

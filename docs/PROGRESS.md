@@ -41,10 +41,13 @@
 - **apps/api(Hono)**：projects/sources/clips/render 全 CRUD、SQLite 队列 + worker、SSE 进度、模板引擎(5 模板 + compile→RenderSpec)、AI refine(可选)、ASR→ASS(可选)。
 - **apps/web(React)**：上传 / 素材(网格·排序·勾选·预览) / 模板(5选+画幅+开关) / 生成(SSE进度) / 结果(标题·模板·时长·下载·regenerate) 完整向导。
 
-### 已知降级（本机 ffmpeg 限制，见 docs + 记忆）
-- 本机 brew ffmpeg 缺 **libfreetype/libass** → 大字标题(drawtext)、字幕(ass) 自动跳过。装全功能 ffmpeg 或用 Docker render 镜像即可启用。
-- 本机无 **aubio** → 卡点降级为固定节奏。
-- 未配 ANTHROPIC_API_KEY / ASR_URL → AI、字幕 跳过（不影响主流程）。
+### 本机依赖现状（2026-06-09 更新）
+- **aubio**：已 `brew install aubio` ✅ —— 卡点(beat-sync)实测生效（输出 0.8s = 2×0.5s 节拍−0.2s 转场，非 1400ms 降级）。
+- **ffmpeg-full**：已 `brew install ffmpeg-full`（keg-only）✅ —— drawtext/ass 可用，大字标题实测烧入成片。render 通过 `FFMPEG_BIN`/`FFPROBE_BIN` 指向它，不影响系统精简 ffmpeg。
+- **docker**：已装(29) ✅，仅可选 asr 字幕识别用到；render 本地 `go run` 直跑(videotoolbox 硬件加速)，不依赖 docker。
+- 仍可选：`ANTHROPIC_API_KEY`(AI)、`ASR_URL`+`docker compose up asr`(字幕识别)。缺则跳过，不影响主流程。
+
+降级逻辑保留：render 启动探测 drawtext/ass/aubio 可用性，任一缺失自动跳过对应特性。
 
 ### 里程碑总览
 | 阶段 | 内容 | 状态 |

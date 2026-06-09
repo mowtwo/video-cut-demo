@@ -94,7 +94,7 @@ func burnSubHandler(c *gin.Context) {
 	args = append(args, encoderArgs(Output{})...)
 	args = append(args, "-c:a", "copy", req.Out)
 	logFFmpegCmd(args)
-	if _, err := runOut("ffmpeg", args...); err != nil {
+	if _, err := runOut(ffmpegBin, args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

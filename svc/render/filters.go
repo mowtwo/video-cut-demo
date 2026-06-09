@@ -13,7 +13,7 @@ var (
 )
 
 func detectFilters() {
-	out, err := exec.Command("ffmpeg", "-hide_banner", "-filters").Output()
+	out, err := exec.Command(ffmpegBin, "-hide_banner", "-filters").Output()
 	if err != nil {
 		return
 	}

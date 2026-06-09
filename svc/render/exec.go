@@ -30,7 +30,7 @@ func runCombined(name string, args ...string) ([]byte, error) {
 // 按 totalMs 计算 0..1 进度并回调 onProgress。所有命令完整打日志便于人肉复现。
 func runFFmpegProgress(args []string, totalMs int64, onProgress func(p float64)) error {
 	logFFmpegCmd(args)
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.Command(ffmpegBin, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

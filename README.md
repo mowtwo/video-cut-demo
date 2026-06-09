@@ -42,7 +42,7 @@ docker compose up asr
 一切可选项缺失时自动跳过、不影响核心出片：
 
 - **BGM / 卡点**：把一个 `bgm.mp3` 放到 `data/assets/bgm.mp3`，启用 BGM 与转场(xfade)。卡点需要 `aubio`（`brew install aubio`），缺失则降级为固定节奏。
-- **大字标题 / 字幕**：需要 ffmpeg 构建含 `libfreetype`（drawtext）和 `libass`（ass）。`render` 启动会探测，缺失则自动跳过文字。装全功能 ffmpeg 或用 render 的 Docker 镜像（内置 libass + Noto CJK 字体）即可启用。
+- **大字标题 / 字幕**：需要 ffmpeg 构建含 `libfreetype`（drawtext）和 `libass`（ass）。macOS 的精简 `ffmpeg` 不含，装全功能版：`brew install ffmpeg-full`（keg-only），然后在 `.env` 设 `FFMPEG_BIN=/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg`（及 `FFPROBE_BIN`）。`render` 启动会探测，缺失则自动跳过文字。
 - **自动字幕**：`docker compose up asr` 起 faster-whisper，并在 `.env` 设 `ASR_URL=http://127.0.0.1:9000`。
 - **AI 优化**：`.env` 设 `ANTHROPIC_API_KEY`。
 
