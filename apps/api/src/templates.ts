@@ -110,7 +110,8 @@ export interface CompileOpts {
 
 // 音量百分比 -> dB（100%→0dB）
 function pctToDb(pct: number | undefined): number {
-  const p = Math.max(1, pct ?? 100) / 100;
+  const n = typeof pct === "number" && Number.isFinite(pct) ? pct : 100;
+  const p = Math.max(1, n) / 100;
   return Math.round(20 * Math.log10(p) * 10) / 10;
 }
 

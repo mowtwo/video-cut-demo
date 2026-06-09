@@ -38,12 +38,12 @@ func resolveFont(_ string) string {
 		}
 	}
 	candidates := []string{
-		"/System/Library/Fonts/PingFang.ttc",                       // macOS
-		"/System/Library/Fonts/Hiragino Sans GB.ttc",               // macOS
-		"/System/Library/Fonts/STHeiti Medium.ttc",                 // macOS
-		"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",   // Linux Noto
-		"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",   // Linux Noto
-		"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",        // Linux Noto
+		"/System/Library/Fonts/PingFang.ttc",                     // macOS
+		"/System/Library/Fonts/Hiragino Sans GB.ttc",             // macOS
+		"/System/Library/Fonts/STHeiti Medium.ttc",               // macOS
+		"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", // Linux Noto
+		"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", // Linux Noto
+		"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",      // Linux Noto
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {

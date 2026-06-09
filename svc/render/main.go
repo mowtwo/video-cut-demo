@@ -47,30 +47,31 @@ func main() {
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"ok":      true,
-			"service": "render",
+			"ok":       true,
+			"service":  "render",
 			"ffmpeg":   hasBin(ffmpegBin),
 			"ffprobe":  hasBin(ffprobeBin),
 			"aubio":    hasBin("aubiotrack"),
 			"drawtext": hasDrawtext,
 			"ass":      hasAss,
 			"hwaccel":  getenv("RENDER_HWACCEL", "none"),
-			"ts":      time.Now().UnixMilli(),
+			"ts":       time.Now().UnixMilli(),
 		})
 	})
 
-	r.POST("/probe", probeHandler)         // {path} -> ProbeResult
-	r.POST("/thumbnail", thumbnailHandler) // {path, atMs, width, out} -> {path}
-	r.POST("/scene", sceneHandler)         // {path, threshold} -> {cutsMs:[...]}
-	r.POST("/beat", beatHandler)           // {path} -> {beatsMs:[...]} (无 aubio 则空)
-	r.POST("/render", renderHandler)       // {jobId,out,callbackUrl,spec} -> RenderResult
-	r.POST("/burnsub", burnSubHandler)     // {input,ass,out} -> 烧录字幕
+	r.POST("/probe", probeHandler)                // {path} -> ProbeResult
+	r.POST("/thumbnail", thumbnailHandler)        // {path, atMs, width, out} -> {path}
+	r.POST("/scene", sceneHandler)                // {path, threshold} -> {cutsMs:[...]}
+	r.POST("/beat", beatHandler)                  // {path} -> {beatsMs:[...]} (无 aubio 则空)
+	r.POST("/render", renderHandler)              // {jobId,out,callbackUrl,spec} -> RenderResult
+	r.POST("/burnsub", burnSubHandler)            // {input,ass,out} -> 烧录字幕
 	r.POST("/extract-audio", extractAudioHandler) // {input,out} -> 16k 单声道 wav(给 ASR)
 	r.POST("/clip", clipHandler)                  // {input,startMs,endMs,out} -> 切出片段(可下载)
 	r.POST("/speech-track", speechTrackHandler)   // {spec,out} -> 对齐成片的纯人声 wav(给字幕识别)
 
-	log.Printf("[render] listening on http://127.0.0.1:%s", port)
-	if err := r.Run("127.0.0.1:" + port); err != nil {
+	host := getenv("RENDER_HOST", "127.0.0.1") // 容器内设 0.0.0.0
+	log.Printf("[render] listening on http://%s:%s", host, port)
+	if err := r.Run(host + ":" + port); err != nil {
 		log.Fatal(err)
 	}
 }

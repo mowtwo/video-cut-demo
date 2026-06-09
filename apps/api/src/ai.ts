@@ -69,6 +69,12 @@ export async function refineSpec(
       return seg;
     });
 
+  // 重排后重算转场：只有相邻段需要，最后一段必须无转场(否则 xfade 链/同步出错)
+  const tpl = spec.segments.find((s) => s.transitionOut)?.transitionOut;
+  segments.forEach((s, i) => {
+    s.transitionOut = i < segments.length - 1 ? tpl : undefined;
+  });
+
   return { ...spec, segments: segments.length ? segments : spec.segments };
 }
 

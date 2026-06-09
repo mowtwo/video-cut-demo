@@ -171,8 +171,16 @@ export function deleteClips(projectId: string): void {
 }
 
 export function setClipOrder(projectId: string, orderedIds: string[]): void {
-  const stmt = db().prepare("UPDATE clips SET order_index=? WHERE id=? AND project_id=?");
-  orderedIds.forEach((id, i) => stmt.run(i, id, projectId));
+  const d = db();
+  const stmt = d.prepare("UPDATE clips SET order_index=? WHERE id=? AND project_id=?");
+  d.exec("BEGIN");
+  try {
+    orderedIds.forEach((id, i) => stmt.run(i, id, projectId));
+    d.exec("COMMIT");
+  } catch (e) {
+    d.exec("ROLLBACK");
+    throw e;
+  }
 }
 
 export function setClipIncluded(id: string, included: boolean): void {
@@ -274,13 +282,14 @@ export function claimNextJob(workerId: string): JobRow | null {
        WHERE id = (SELECT id FROM jobs WHERE status='queued' ORDER BY priority DESC, created_at ASC LIMIT 1)
        RETURNING *`,
     )
-    .get(workerId, now(), now() + 5 * 60_000) as any;
+    .get(workerId, now(), now() + 10 * 60_000) as any;
   if (!r) return null;
   return { id: r.id, type: r.type, projectId: r.project_id, payload: JSON.parse(r.payload_json || "{}"), status: r.status, progress: r.progress, error: r.error };
 }
 
 export function setJobProgress(id: string, progress: number, message?: string): void {
-  db().prepare("UPDATE jobs SET progress=? WHERE id=?").run(progress, id);
+  // 同时续租：长渲染靠进度回调不断刷新 lease_until，避免被 recoverStaleJobs 误判为僵死而重复执行
+  db().prepare("UPDATE jobs SET progress=?, lease_until=? WHERE id=?").run(progress, now() + 10 * 60_000, id);
   const j = db().prepare("SELECT project_id FROM jobs WHERE id=?").get(id) as any;
   if (j) emitEvent(id, j.project_id, progress, message);
 }

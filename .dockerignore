@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.turbo
+**/bin
+data
+.git
+*.log
+.env
+.env.local
+.render.log
+.api.log
+.web.log

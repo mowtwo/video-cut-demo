@@ -2,6 +2,17 @@
 
 > 里程碑定义见 [`DESIGN.md`](DESIGN.md) §14。本文件随开发滚动更新。
 
+## 工程化 & 稳定性回归（2026-06-09）
+
+- **Docker 全栈**：web(nginx 反代)/api/render(全功能 ffmpeg+aubio+Noto CJK)/asr 四服务 compose 一键起；三镜像均已构建验证，render 容器实测 drawtext/ass/aubiotrack/字体齐全。
+- **README**：完整中文文档（技术栈/架构/**视频主流程次序**/模板原理/本地与 Docker 启动/配置/降级/迁移/API）。
+- **稳定性回归**：typecheck(全绿) + go vet/gofmt + turbo build(4/4) + 镜像构建 + 子代理代码审查。修复：
+  - ffmpeg 进程改用 `CommandContext`+进程组,超时/取消时杀整组(防孤儿进程与并发闸耗尽)。
+  - 作业租约随进度续期(10min),长渲染不再被误判僵死而重复执行。
+  - worker 改为并发(3),长渲染不再阻塞 probe/segment/字幕。
+  - 下载改为**流式**(不再整文件读内存,防大成片 OOM)。
+  - 渲染产物校验(存在/非空/可探测时长)才标记完成;xfade 转场按镜头长 clamp;clip 排序加事务;AI 重排后重算转场;音量 NaN 防护;scene 解析空字段防 panic。
+
 ## 当前状态：M0 脚手架 ✅ 完成
 
 ### 已完成

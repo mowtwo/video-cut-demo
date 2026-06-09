@@ -93,8 +93,11 @@ func parsePtsTimes(s string) []int64 {
 		if idx < 0 {
 			continue
 		}
-		val := strings.TrimSpace(line[idx+len("pts_time:"):])
-		if f, err := strconv.ParseFloat(strings.Fields(val)[0], 64); err == nil {
+		fields := strings.Fields(line[idx+len("pts_time:"):])
+		if len(fields) == 0 {
+			continue
+		}
+		if f, err := strconv.ParseFloat(fields[0], 64); err == nil {
 			cuts = append(cuts, int64(f*1000))
 		}
 	}

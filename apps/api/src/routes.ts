@@ -1,9 +1,10 @@
 import type { AspectRatio, Clip, Project, Render, Source, TemplateId } from "@vcd/shared";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
+import { Readable } from "node:stream";
 import { aiAvailable, refineSpec } from "./ai.js";
 import { absPath, config, fileUrl, paths } from "./config.js";
 import {
@@ -23,6 +24,16 @@ const renderDTO = (r: Render) => ({
   ...r, url: fileUrl(r.outPath), thumbUrl: fileUrl(r.thumbPath),
   downloadUrl: r.outPath ? `/renders/${r.id}/download` : null,
 });
+
+// 流式下载：从磁盘直接流给客户端，不把整个文件读进内存(避免大成片 OOM)
+function streamFile(c: any, absFile: string, filename: string) {
+  if (!existsSync(absFile)) return c.json({ error: "file not found" }, 404);
+  const size = statSync(absFile).size;
+  c.header("content-type", "video/mp4");
+  c.header("content-length", String(size));
+  c.header("content-disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+  return c.body(Readable.toWeb(createReadStream(absFile)) as any);
+}
 
 export function registerRoutes(app: Hono) {
   // ---- 能力探测 ----
@@ -133,11 +144,7 @@ export function registerRoutes(app: Hono) {
     if (!existsSync(absPath(rel))) {
       await renderClient.clip(absPath(src.path), clip.startMs, clip.endMs, absPath(rel));
     }
-    const { readFile } = await import("node:fs/promises");
-    const buf = await readFile(absPath(rel));
-    c.header("content-type", "video/mp4");
-    c.header("content-disposition", `attachment; filename="clip-${clip.id}.mp4"`);
-    return c.body(buf as any);
+    return streamFile(c, absPath(rel), `clip-${clip.id}.mp4`);
   });
 
   app.patch("/projects/:id/clips/reorder", async (c) => {
@@ -174,14 +181,10 @@ export function registerRoutes(app: Hono) {
     return r ? c.json(renderDTO(r)) : c.json({ error: "not found" }, 404);
   });
 
-  app.get("/renders/:id/download", async (c) => {
+  app.get("/renders/:id/download", (c) => {
     const r = getRender(c.req.param("id"));
     if (!r?.outPath) return c.json({ error: "not ready" }, 404);
-    const { readFile } = await import("node:fs/promises");
-    const buf = await readFile(absPath(r.outPath));
-    c.header("content-type", "video/mp4");
-    c.header("content-disposition", `attachment; filename="${encodeURIComponent(r.id)}.mp4"`);
-    return c.body(buf as any);
+    return streamFile(c, absPath(r.outPath), `${r.id}.mp4`);
   });
 
   // ---- 进度回调（svc/render -> api）----

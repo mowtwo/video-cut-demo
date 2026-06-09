@@ -56,13 +56,18 @@ func renderHandler(c *gin.Context) {
 		return
 	}
 
-	// 实测输出时长
-	var durMs int64 = totalMs
-	if pr, err := probe(req.Out); err == nil && pr.DurationMs > 0 {
-		durMs = pr.DurationMs
+	// 校验产物有效(存在、非空、可探测时长)，避免把坏文件当成功
+	if fi, err := os.Stat(req.Out); err != nil || fi.Size() == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "render produced no output"})
+		return
+	}
+	pr, err := probe(req.Out)
+	if err != nil || pr.DurationMs <= 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "render output invalid (no duration)"})
+		return
 	}
 	postProgress(req.CallbackURL, req.JobID, 1.0, "done")
-	c.JSON(http.StatusOK, RenderResult{OutPath: req.Out, DurationMs: durMs})
+	c.JSON(http.StatusOK, RenderResult{OutPath: req.Out, DurationMs: pr.DurationMs})
 }
 
 // burnSubHandler 把 ASS 字幕烧录到已有 mp4（单输入，便宜的二次编码）。
@@ -233,10 +238,15 @@ func segVideoFilter(i int, seg Segment, w, h int, fps float64) string {
 // xfade 链：offset 累计计算
 func xfadeChain(segs []Segment) []string {
 	var out []string
-	accLen := float64(segs[0].SrcDurMs) / 1000.0 / nonZero(segs[0].Speed)
+	segLen := func(s Segment) float64 { return float64(s.SrcDurMs) / 1000.0 / nonZero(s.Speed) }
+	accLen := segLen(segs[0])
 	prev := "[v0]"
 	for k := 1; k < len(segs); k++ {
 		t := float64(segs[k-1].TransitionOut.DurMs) / 1000.0
+		// 转场不能超过相邻两段较短者的一半，否则 xfade offset 非法/冻帧
+		if maxT := 0.5 * min2(accLen, segLen(segs[k])); t > maxT {
+			t = maxT
+		}
 		typ := segs[k-1].TransitionOut.Type
 		if typ == "" || typ == "none" {
 			typ = "fade"
@@ -368,6 +378,13 @@ func nonZero(f float64) float64 {
 		return 1
 	}
 	return f
+}
+
+func min2(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // originalAudioFilters 生成「按 segment 顺序拼接的原声」滤镜，产出 [aorig]。

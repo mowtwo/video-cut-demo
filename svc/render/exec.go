@@ -2,15 +2,40 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 )
+
+// 默认超时：轻量命令 10 分钟，渲染 30 分钟。
+const (
+	cmdTimeout    = 10 * time.Minute
+	renderTimeout = 30 * time.Minute
+)
+
+// newCmd 创建带超时、独立进程组的命令；取消时杀掉整个进程组(ffmpeg 会拉子进程)。
+func newCmd(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) // 负 pid = 整个进程组
+		}
+		return nil
+	}
+	cmd.WaitDelay = 5 * time.Second // 取消后仍不退则强杀
+	return cmd
+}
 
 // runOut 运行命令并返回 stdout；出错时把 stderr 一并带回，便于调试。
 func runOut(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	cmd := newCmd(ctx, name, args...)
 	var errBuf strings.Builder
 	cmd.Stderr = &errBuf
 	out, err := cmd.Output()
@@ -22,7 +47,9 @@ func runOut(name string, args ...string) ([]byte, error) {
 
 // runCombined 运行命令并返回 stdout+stderr 合并输出（某些 ffmpeg 信息打到 stderr）。
 func runCombined(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	cmd := newCmd(ctx, name, args...)
 	return cmd.CombinedOutput()
 }
 
@@ -30,7 +57,9 @@ func runCombined(name string, args ...string) ([]byte, error) {
 // 按 totalMs 计算 0..1 进度并回调 onProgress。所有命令完整打日志便于人肉复现。
 func runFFmpegProgress(args []string, totalMs int64, onProgress func(p float64)) error {
 	logFFmpegCmd(args)
-	cmd := exec.Command(ffmpegBin, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
+	defer cancel()
+	cmd := newCmd(ctx, ffmpegBin, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
