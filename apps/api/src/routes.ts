@@ -8,10 +8,11 @@ import { aiAvailable, refineSpec } from "./ai.js";
 import { absPath, config, fileUrl, paths } from "./config.js";
 import {
   createProject, createRender, deleteSource, enqueueJob, eventsSince, getAnalysis,
-  getClip, getProject, getRender, listClips, listRenders, listSources, newId, saveAnalysis,
-  setClipIncluded, setClipOrder, createSource, getSource, setJobProgress, setProjectBgm,
-  updateProject,
+  getClip, getProject, getProjectSettings, getRender, listClips, listRenders, listSources,
+  newId, saveAnalysis, setClipIncluded, setClipOrder, createSource, getSource, setJobProgress,
+  setProjectBgm, setProjectSettings, updateProject,
 } from "./db.js";
+import type { RenderSpec } from "@vcd/shared";
 import { renderClient } from "./render-client.js";
 import { compile, TEMPLATES } from "./templates.js";
 
@@ -45,7 +46,7 @@ export function registerRoutes(app: Hono) {
     const p = getProject(id);
     if (!p) return c.json({ error: "not found" }, 404);
     return c.json({
-      project: { ...p, bgmUrl: fileUrl(p.bgmPath) },
+      project: { ...p, bgmUrl: fileUrl(p.bgmPath), settings: getProjectSettings(id) },
       sources: listSources(id).map(sourceDTO),
       clips: listClips(id).map(clipDTO),
       renders: listRenders(id).map(renderDTO),
@@ -152,6 +153,16 @@ export function registerRoutes(app: Hono) {
     return c.json({ ok: true });
   });
 
+  // ---- 预估时长（不渲染，仅编译算长度）----
+  app.post("/projects/:id/estimate", async (c) => {
+    const project = getProject(c.req.param("id"));
+    if (!project) return c.json({ error: "project not found" }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const spec = await composeSpec(project, body, 1);
+    if (!spec) return c.json({ durationMs: 0, segmentCount: 0 });
+    return c.json({ durationMs: estimateDuration(spec), segmentCount: spec.segments.length });
+  });
+
   // ---- 出片 ----
   app.post("/projects/:id/render", (c) => doRender(c));
   app.post("/projects/:id/regenerate", (c) => doRender(c, true));
@@ -197,6 +208,63 @@ export function registerRoutes(app: Hono) {
   });
 }
 
+// 把请求里的混剪配置(模板/画幅/音频/标题)编译成 RenderSpec(不含 AI refine)。
+// doRender 与 /estimate 共用，保证"预估时长"和"真实出片"用同一套逻辑。
+async function composeSpec(project: any, body: any, seed: number): Promise<RenderSpec | null> {
+  const templateId: TemplateId = body.templateId ?? project.templateId ?? "highlight";
+  const aspect: AspectRatio = body.aspect ?? project.aspect ?? "original";
+
+  const sourcesRel = listSources(project.id);
+  if (sourcesRel.length === 0) return null;
+  const sources = sourcesRel.map((s) => ({ ...s, path: absPath(s.path) }));
+  const clips = listClips(project.id);
+
+  const audioMode: "mix" | "bgm" | "original" = body.audioMode ?? (body.noMusic ? "original" : "bgm");
+
+  let bgmAbs: string | null = null;
+  if (audioMode !== "original") {
+    if (project.bgmPath && existsSync(absPath(project.bgmPath))) bgmAbs = absPath(project.bgmPath);
+    else if (existsSync(absPath("assets/bgm.mp3"))) bgmAbs = absPath("assets/bgm.mp3");
+  }
+  let beats: number[] = [];
+  if (bgmAbs && TEMPLATES[templateId].pacing.mode === "beat_sync") {
+    beats = (getAnalysis(project.id, "beat") as number[]) ?? [];
+    if (!beats.length) {
+      try {
+        beats = (await renderClient.beat(bgmAbs)).beatsMs;
+        saveAnalysis(project.id, null, "beat", beats);
+      } catch { beats = []; }
+    }
+  }
+
+  return compile({
+    templateId, aspect, clips, sources, beats,
+    title: project.title, bgmPath: bgmAbs, assPath: null, seed,
+    audioMode, bgmVolume: body.bgmVolume, originalVolume: body.originalVolume,
+    titleStyle: body.titleStyle,
+  });
+}
+
+// 估算成片时长(ms)：concat=各段之和；带转场的纯配乐 xfade 会略短，扣掉转场重叠。
+function estimateDuration(spec: RenderSpec): number {
+  let total = spec.segments.reduce((a, s) => a + s.targetDurMs, 0);
+  if (spec.bgm && !spec.bgm.mixOriginal) {
+    for (let i = 0; i < spec.segments.length - 1; i++) {
+      total -= spec.segments[i].transitionOut?.durMs ?? 0;
+    }
+  }
+  return Math.max(0, Math.round(total));
+}
+
+// 持久化用户这次的混剪配置，下次进来自动恢复
+function saveSettings(id: string, body: any) {
+  setProjectSettings(id, {
+    templateId: body.templateId, aspect: body.aspect, audioMode: body.audioMode,
+    bgmVolume: body.bgmVolume, originalVolume: body.originalVolume,
+    withSubtitle: body.withSubtitle, useAi: body.useAi, titleStyle: body.titleStyle,
+  });
+}
+
 // 渲染：编译 RenderSpec -> 建 render 行 -> 入队 render 作业
 async function doRender(c: any, regenerate = false) {
   const id = c.req.param("id");
@@ -212,50 +280,15 @@ async function doRender(c: any, regenerate = false) {
   const seed = body.seed ?? (regenerate ? Math.floor(Date.now() % 100000) : 1);
 
   updateProject(id, { templateId, aspect });
+  saveSettings(id, body);
 
-  const sourcesRel = listSources(id);
-  if (sourcesRel.length === 0) return c.json({ error: "请先上传视频" }, 400);
-  // compile 需要绝对路径
-  const sources = sourcesRel.map((s) => ({ ...s, path: absPath(s.path) }));
-  const clips = listClips(id);
-
-  // 音频模式：mix=配乐+原声混合 / bgm=仅配乐 / original=仅原声
-  const audioMode: "mix" | "bgm" | "original" = body.audioMode ?? (body.noMusic ? "original" : "bgm");
-  const bgmVolume = body.bgmVolume;
-  const originalVolume = body.originalVolume;
-
-  // BGM 解析：original 模式不加配乐 > 工程上传的配乐 > 全局 assets/bgm.mp3 > 无
-  let bgmAbs: string | null = null;
-  if (audioMode !== "original") {
-    if (project.bgmPath && existsSync(absPath(project.bgmPath))) {
-      bgmAbs = absPath(project.bgmPath);
-    } else if (existsSync(absPath("assets/bgm.mp3"))) {
-      bgmAbs = absPath("assets/bgm.mp3");
-    }
-  }
-  const hasBgm = !!bgmAbs;
-  let beats: number[] = [];
-  if (hasBgm && TEMPLATES[templateId].audio.useBgm) {
-    beats = (getAnalysis(id, "beat") as number[]) ?? [];
-    if (!beats.length) {
-      try {
-        const r = await renderClient.beat(bgmAbs!);
-        beats = r.beatsMs;
-        saveAnalysis(id, null, "beat", beats);
-      } catch { beats = []; }
-    }
-  }
-
-  let spec = compile({
-    templateId, aspect, clips, sources, beats,
-    title: project.title, bgmPath: hasBgm ? bgmAbs : null, assPath: null, seed,
-    audioMode, bgmVolume, originalVolume, titleStyle: body.titleStyle,
-  });
+  let spec = await composeSpec(project, body, seed);
+  if (!spec) return c.json({ error: "请先上传视频" }, 400);
 
   let aiRefined = false;
   if (useAi && aiAvailable()) {
     try {
-      spec = await refineSpec(spec, clips, prompt);
+      spec = await refineSpec(spec, listClips(id), prompt);
       aiRefined = true;
     } catch (e) {
       console.warn("[ai] refine 失败，使用原 spec:", String(e));

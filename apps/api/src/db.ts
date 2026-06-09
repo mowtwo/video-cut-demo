@@ -66,6 +66,15 @@ export function setProjectBgm(id: string, bgmPath: string | null): void {
   db().prepare("UPDATE projects SET bgm_path=?, updated_at=? WHERE id=?").run(bgmPath, now(), id);
 }
 
+export function setProjectSettings(id: string, settings: unknown): void {
+  db().prepare("UPDATE projects SET settings_json=?, updated_at=? WHERE id=?").run(JSON.stringify(settings), now(), id);
+}
+
+export function getProjectSettings(id: string): unknown | null {
+  const r = db().prepare("SELECT settings_json FROM projects WHERE id=?").get(id) as any;
+  return r?.settings_json ? JSON.parse(r.settings_json) : null;
+}
+
 function rowToProject(r: any): Project {
   return {
     id: r.id,

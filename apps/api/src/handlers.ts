@@ -116,12 +116,18 @@ async function asrJob(job: JobRow) {
   const absIn = absPath(r.outPath);
 
   try {
-    setJobProgress(job.id, 0.1, "提取音频…");
-    // 先用全功能 ffmpeg 抽成 16k 单声道 wav（容器内 whisper 对 wav 最稳）
-    const wavRel = `out/${renderId}.wav`;
-    await renderClient.extractAudio(absIn, absPath(wavRel));
+    setJobProgress(job.id, 0.1, "提取人声…");
+    // 关键：用「混入背景音乐之前」的纯人声轨识别(音乐会干扰识别)。
+    // speech-track 产出与成片时间轴对齐的纯原声 wav。
+    const spec = getRenderSpec(renderId);
+    const wavRel = `out/${renderId}.speech.wav`;
+    if (spec) {
+      await renderClient.speechTrack(spec, absPath(wavRel));
+    } else {
+      await renderClient.extractAudio(absIn, absPath(wavRel)); // 兜底
+    }
 
-    setJobProgress(job.id, 0.2, "转写中…");
+    setJobProgress(job.id, 0.3, "转写中…");
     const segs = await transcribe(absPath(wavRel));
     if (!segs.length) { setJobProgress(job.id, 1, "无可识别语音，跳过字幕"); return; }
 

@@ -162,22 +162,7 @@ func buildRenderArgs(spec *RenderSpec, out string) ([]string, int64, func(), err
 	var amap string
 
 	if needOriginal {
-		// 每段原声 -> [a{i}] -> concat -> [aorig]（缺音轨的段用 anullsrc 补静音）
-		for i, seg := range spec.Segments {
-			dur := float64(seg.SrcDurMs) / 1000.0 / nonZero(seg.Speed)
-			pr, _ := probeCached(seg.Src)
-			if pr != nil && pr.HasAudio {
-				fc = append(fc, fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,atempo=%.3f,aresample=44100[a%d]", i, nonZero(seg.Speed), i))
-			} else {
-				fc = append(fc, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=0:%.3f,asetpts=PTS-STARTPTS[a%d]", dur, i))
-			}
-		}
-		var b strings.Builder
-		for i := 0; i < n; i++ {
-			b.WriteString(fmt.Sprintf("[a%d]", i))
-		}
-		b.WriteString(fmt.Sprintf("concat=n=%d:v=0:a=1[aorig]", n))
-		fc = append(fc, b.String())
+		fc = append(fc, originalAudioFilters(spec.Segments)...) // -> [aorig]
 	}
 
 	if spec.Bgm != nil {
@@ -383,6 +368,69 @@ func nonZero(f float64) float64 {
 		return 1
 	}
 	return f
+}
+
+// originalAudioFilters 生成「按 segment 顺序拼接的原声」滤镜，产出 [aorig]。
+// 约定：输入 0..n-1 依次是各 segment（缺音轨的段用 anullsrc 在图内补静音）。
+func originalAudioFilters(segs []Segment) []string {
+	var fc []string
+	for i, seg := range segs {
+		dur := float64(seg.SrcDurMs) / 1000.0 / nonZero(seg.Speed)
+		pr, _ := probeCached(seg.Src)
+		if pr != nil && pr.HasAudio {
+			fc = append(fc, fmt.Sprintf("[%d:a]asetpts=PTS-STARTPTS,atempo=%.3f,aresample=44100[a%d]", i, nonZero(seg.Speed), i))
+		} else {
+			fc = append(fc, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=0:%.3f,asetpts=PTS-STARTPTS[a%d]", dur, i))
+		}
+	}
+	var b strings.Builder
+	for i := range segs {
+		b.WriteString(fmt.Sprintf("[a%d]", i))
+	}
+	b.WriteString(fmt.Sprintf("concat=n=%d:v=0:a=1[aorig]", len(segs)))
+	fc = append(fc, b.String())
+	return fc
+}
+
+// speechTrackHandler 产出「与成片时间轴对齐的纯人声 16k 单声道 wav」，
+// 供 ASR 在混入背景音乐之前做识别（音乐会干扰识别）。
+func speechTrackHandler(c *gin.Context) {
+	var req struct {
+		Spec RenderSpec `json:"spec"`
+		Out  string     `json:"out" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.Spec.Segments) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no segments"})
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(req.Out), 0o755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var inputs []string
+	for _, seg := range req.Spec.Segments {
+		inputs = append(inputs,
+			"-ss", fmt.Sprintf("%.3f", float64(seg.SrcInMs)/1000.0),
+			"-t", fmt.Sprintf("%.3f", float64(seg.SrcDurMs)/1000.0),
+			"-i", seg.Src,
+		)
+	}
+	fc := originalAudioFilters(req.Spec.Segments)
+	args := []string{"-y"}
+	args = append(args, inputs...)
+	args = append(args, "-filter_complex", strings.Join(fc, ";"),
+		"-map", "[aorig]", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", req.Out)
+	logFFmpegCmd(args)
+	if _, err := runOut(ffmpegBin, args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"out": req.Out})
 }
 
 // postProgress 把进度回传给 api 的 /internal/progress

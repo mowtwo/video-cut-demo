@@ -38,6 +38,11 @@ export function Result({
   if (!render) return <div className="py-20 text-center text-neutral-400">暂无结果</div>;
   const tplName = templates.find((t) => t.id === render.templateId)?.name ?? render.templateId;
 
+  // 上次生成的完整配置(音频/标题等)，重新生成时一并带上，只覆盖面板里改的项
+  const saved = bundle.project.settings ?? {};
+  const regen = (extra: Record<string, unknown>) =>
+    onRegenerate({ ...saved, templateId, aspect, withSubtitle, ...extra });
+
   return (
     <div className="space-y-5">
       <div>
@@ -97,6 +102,7 @@ export function Result({
       {/* 重新生成面板：可调模板/画幅/选项 */}
       <div className="space-y-3 rounded-lg border border-neutral-800 p-4">
         <h3 className="text-sm font-medium text-neutral-200">重新生成（可调整配置）</h3>
+        <p className="text-[11px] text-neutral-500">配乐/混音/标题样式沿用上次设置；要改这些请回「模板」步骤。</p>
         <div>
           <div className="mb-1 text-xs text-neutral-500">模板</div>
           <div className="flex flex-wrap gap-1.5">
@@ -145,14 +151,14 @@ export function Result({
         )}
         <div className="flex gap-2">
           <button
-            onClick={() => onRegenerate({ templateId, aspect, withSubtitle, useAi, prompt: prompt || null })}
+            onClick={() => regen({ useAi, prompt: prompt || null })}
             className="flex items-center gap-1.5 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white"
           >
             <ReloadIcon /> 用以上配置重新生成
           </button>
           {useAi && caps?.ai && (
             <button
-              onClick={() => onRegenerate({ templateId, aspect, useAi: true, prompt: prompt || null })}
+              onClick={() => regen({ useAi: true, prompt: prompt || null })}
               className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-4 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
             >
               <MagicWandIcon /> AI 重生成

@@ -10,8 +10,19 @@ export type RenderDTO = Render & {
   downloadUrl: string | null;
 };
 
+export type RenderSettings = {
+  templateId?: string;
+  aspect?: string;
+  audioMode?: "mix" | "bgm" | "original";
+  bgmVolume?: number;
+  originalVolume?: number;
+  withSubtitle?: boolean;
+  useAi?: boolean;
+  titleStyle?: { pos?: string; durationSec?: number; sizePct?: number; color?: string };
+} | null;
+
 export interface ProjectBundle {
-  project: Project & { bgmUrl?: string | null };
+  project: Project & { bgmUrl?: string | null; settings?: RenderSettings };
   sources: SourceDTO[];
   clips: ClipDTO[];
   renders: RenderDTO[];
@@ -83,6 +94,13 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ included }),
     }).then(j),
+
+  estimate: (id: string, opts: Record<string, unknown>) =>
+    fetch(`${base}/projects/${id}/estimate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(opts),
+    }).then(j<{ durationMs: number; segmentCount: number }>),
 
   render: (id: string, opts: Record<string, unknown>) =>
     fetch(`${base}/projects/${id}/render`, {

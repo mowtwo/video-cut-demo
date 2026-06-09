@@ -49,4 +49,7 @@ export const renderClient = {
 
   clip: (input: string, startMs: number, endMs: number, out: string) =>
     post<{ out: string }>("/clip", { input, startMs, endMs, out }, 120_000),
+
+  speechTrack: (spec: RenderSpec, out: string) =>
+    post<{ out: string }>("/speech-track", { spec, out }, 120_000),
 };

@@ -1,7 +1,8 @@
-import { Cross2Icon, SpeakerLoudIcon } from "@radix-ui/react-icons";
+import { ClockIcon, Cross2Icon, SpeakerLoudIcon } from "@radix-ui/react-icons";
 import type { Capabilities } from "@vcd/shared";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, asset, type ProjectBundle } from "../api.js";
+import { msToClock } from "../lib/format.js";
 
 const ASPECTS = [
   { id: "9:16", label: "9:16 竖屏" },
@@ -25,27 +26,45 @@ export function Template({
   onGenerate: (opts: Record<string, unknown>) => void;
   refresh: () => void;
 }) {
-  const [templateId, setTemplateId] = useState(templates[0]?.id ?? "highlight");
-  const [aspect, setAspect] = useState("original");
+  // 上次保存的配置(记忆)，作为默认值
+  const s = bundle.project.settings ?? {};
+  const ts0 = s.titleStyle ?? {};
+  const [templateId, setTemplateId] = useState(s.templateId ?? templates[0]?.id ?? "highlight");
+  const [aspect, setAspect] = useState(s.aspect ?? "original");
   const [title, setTitle] = useState(bundle.project.title);
-  const [withSubtitle, setWithSubtitle] = useState(false);
-  const [useAi, setUseAi] = useState(false);
+  const [withSubtitle, setWithSubtitle] = useState(s.withSubtitle ?? false);
+  const [useAi, setUseAi] = useState(s.useAi ?? false);
   const [prompt, setPrompt] = useState("");
   const [uploadingBgm, setUploadingBgm] = useState(false);
   const bgmInput = useRef<HTMLInputElement>(null);
 
   // 音频
-  const [audioMode, setAudioMode] = useState<"mix" | "bgm" | "original">("original");
-  const [bgmVolume, setBgmVolume] = useState(100);
-  const [originalVolume, setOriginalVolume] = useState(100);
+  const [audioMode, setAudioMode] = useState<"mix" | "bgm" | "original">(s.audioMode ?? "original");
+  const [bgmVolume, setBgmVolume] = useState(s.bgmVolume ?? 100);
+  const [originalVolume, setOriginalVolume] = useState(s.originalVolume ?? 100);
 
   // 标题样式
-  const [titlePos, setTitlePos] = useState<"top" | "center" | "bottom">("top");
-  const [titleSize, setTitleSize] = useState("medium");
-  const [titleDuration, setTitleDuration] = useState(2.6);
-  const [titleColor, setTitleColor] = useState("white");
+  const [titlePos, setTitlePos] = useState<"top" | "center" | "bottom">((ts0.pos as any) ?? "top");
+  const [titleSize, setTitleSize] = useState(
+    TITLE_SIZES.find((x) => x.pct === ts0.sizePct)?.id ?? "medium",
+  );
+  const [titleDuration, setTitleDuration] = useState(ts0.durationSec ?? 2.6);
+  const [titleColor, setTitleColor] = useState(ts0.color ?? "white");
 
+  const [estimate, setEstimate] = useState<{ durationMs: number; segmentCount: number } | null>(null);
   const bgmUrl = bundle.project.bgmUrl;
+
+  // 预估成片时长（模板/画幅/音频/选用片段变化时重算，防抖）
+  const includedCount = bundle.clips.filter((c) => c.included).length;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      api
+        .estimate(projectId, { templateId, aspect, audioMode: bgmUrl ? audioMode : "original" })
+        .then(setEstimate)
+        .catch(() => setEstimate(null));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [projectId, templateId, aspect, audioMode, bgmUrl, includedCount]);
 
   async function uploadBgm(f: File | undefined) {
     if (!f) return;
@@ -191,6 +210,13 @@ export function Template({
         )}
       </div>
 
+      {estimate && (
+        <div className="flex items-center justify-center gap-1.5 text-xs text-neutral-400">
+          <ClockIcon />
+          预计成片 ~{msToClock(estimate.durationMs)}（{estimate.segmentCount} 个镜头）
+          {includedCount === 0 && "（请先在素材页选用片段）"}
+        </div>
+      )}
       <button onClick={generate} className="w-full rounded-md bg-emerald-500 py-2.5 font-medium text-neutral-950 hover:bg-emerald-400">
         生成视频
       </button>
