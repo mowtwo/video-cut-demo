@@ -66,6 +66,7 @@ func main() {
 	r.POST("/render", renderHandler)       // {jobId,out,callbackUrl,spec} -> RenderResult
 	r.POST("/burnsub", burnSubHandler)     // {input,ass,out} -> 烧录字幕
 	r.POST("/extract-audio", extractAudioHandler) // {input,out} -> 16k 单声道 wav(给 ASR)
+	r.POST("/clip", clipHandler)                  // {input,startMs,endMs,out} -> 切出片段(可下载)
 
 	log.Printf("[render] listening on http://127.0.0.1:%s", port)
 	if err := r.Run("127.0.0.1:" + port); err != nil {

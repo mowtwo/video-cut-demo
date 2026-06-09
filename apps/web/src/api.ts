@@ -53,6 +53,9 @@ export const api = {
     );
   },
 
+  deleteSource: (id: string, sid: string) =>
+    fetch(`${base}/projects/${id}/sources/${sid}`, { method: "DELETE" }).then(j),
+
   segment: (id: string) =>
     fetch(`${base}/projects/${id}/segment`, { method: "POST" }).then(j<{ jobId: string }>),
 

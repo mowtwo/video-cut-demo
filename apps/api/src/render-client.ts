@@ -46,4 +46,7 @@ export const renderClient = {
 
   extractAudio: (input: string, out: string) =>
     post<{ out: string }>("/extract-audio", { input, out }, 120_000),
+
+  clip: (input: string, startMs: number, endMs: number, out: string) =>
+    post<{ out: string }>("/clip", { input, startMs, endMs, out }, 120_000),
 };

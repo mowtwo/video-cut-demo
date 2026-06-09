@@ -75,7 +75,7 @@ export function App() {
       const { renderId } = regenerate
         ? await api.regenerate(projectId, opts)
         : await api.render(projectId, opts);
-      await waitForRender(renderId);
+      await waitForRender(renderId, !!opts.withSubtitle);
     } catch (e) {
       setGen((g) => ({ ...g, message: `失败：${String(e)}` }));
       return;
@@ -87,14 +87,22 @@ export function App() {
     setStep(4);
   }
 
-  async function waitForRender(renderId: string) {
+  async function waitForRender(renderId: string, wantSub: boolean) {
+    let doneAt = -1;
     for (let i = 0; i < 600; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       const b = await api.getProject(projectId!);
       setBundle(b);
       const r = b.renders.find((x) => x.id === renderId);
-      if (r?.status === "done") return;
       if (b.project.status === "failed") throw new Error("渲染失败");
+      if (r?.status === "done") {
+        if (!wantSub) return;
+        // 字幕是渲染完成后异步生成的，等它把成片替换为 -sub 版本
+        if (r.outPath?.includes("-sub")) return;
+        if (doneAt < 0) doneAt = i;
+        setGen((g) => ({ ...g, message: "生成字幕中…" }));
+        if (i - doneAt > 90) return; // 等够久仍无字幕(可能无语音)，按无字幕结束
+      }
     }
     throw new Error("超时");
   }

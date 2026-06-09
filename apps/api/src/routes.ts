@@ -7,9 +7,10 @@ import { extname } from "node:path";
 import { aiAvailable, refineSpec } from "./ai.js";
 import { absPath, config, fileUrl, paths } from "./config.js";
 import {
-  createProject, createRender, enqueueJob, eventsSince, getAnalysis, getProject,
-  getRender, listClips, listRenders, listSources, newId, saveAnalysis, setClipIncluded,
-  setClipOrder, createSource, getSource, setJobProgress, setProjectBgm, updateProject,
+  createProject, createRender, deleteSource, enqueueJob, eventsSince, getAnalysis,
+  getClip, getProject, getRender, listClips, listRenders, listSources, newId, saveAnalysis,
+  setClipIncluded, setClipOrder, createSource, getSource, setJobProgress, setProjectBgm,
+  updateProject,
 } from "./db.js";
 import { renderClient } from "./render-client.js";
 import { compile, TEMPLATES } from "./templates.js";
@@ -85,6 +86,11 @@ export function registerRoutes(app: Hono) {
     c.json(listSources(c.req.param("id")).map(sourceDTO)),
   );
 
+  app.delete("/projects/:id/sources/:sid", (c) => {
+    deleteSource(c.req.param("sid")); // 关联 clips 经外键级联删除
+    return c.json({ ok: true });
+  });
+
   // ---- 配乐：上传 / 清除 ----
   app.post("/projects/:id/bgm", async (c) => {
     const id = c.req.param("id");
@@ -115,6 +121,23 @@ export function registerRoutes(app: Hono) {
   });
 
   app.get("/projects/:id/clips", (c) => c.json(listClips(c.req.param("id")).map(clipDTO)));
+
+  // 下载单个 clip（按需切出，缓存到 out/clip-<id>.mp4）
+  app.get("/projects/:id/clips/:cid/download", async (c) => {
+    const clip = getClip(c.req.param("cid"));
+    if (!clip) return c.json({ error: "clip not found" }, 404);
+    const src = getSource(clip.sourceId);
+    if (!src) return c.json({ error: "source not found" }, 404);
+    const rel = `out/clip-${clip.id}.mp4`;
+    if (!existsSync(absPath(rel))) {
+      await renderClient.clip(absPath(src.path), clip.startMs, clip.endMs, absPath(rel));
+    }
+    const { readFile } = await import("node:fs/promises");
+    const buf = await readFile(absPath(rel));
+    c.header("content-type", "video/mp4");
+    c.header("content-disposition", `attachment; filename="clip-${clip.id}.mp4"`);
+    return c.body(buf as any);
+  });
 
   app.patch("/projects/:id/clips/reorder", async (c) => {
     const id = c.req.param("id");

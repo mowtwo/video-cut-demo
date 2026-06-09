@@ -1,4 +1,4 @@
-import { UploadIcon, VideoIcon } from "@radix-ui/react-icons";
+import { TrashIcon, UploadIcon, VideoIcon } from "@radix-ui/react-icons";
 import { useRef, useState } from "react";
 import { api, asset, type ProjectBundle } from "../api.js";
 import { msToClock } from "../lib/format.js";
@@ -79,7 +79,19 @@ export function Upload({
                 </div>
               )}
               <div className="flex-1 text-sm">
-                <div className="font-medium text-neutral-100">{s.filename}</div>
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-neutral-100">{s.filename}</div>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("删除这个素材？相关 clips 会一并移除")) return;
+                      await api.deleteSource(projectId, s.id);
+                      refresh();
+                    }}
+                    className="flex items-center gap-1 rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-400 hover:border-red-500 hover:text-red-400"
+                  >
+                    <TrashIcon /> 删除
+                  </button>
+                </div>
                 <dl className="mt-2 grid grid-cols-2 gap-1 text-neutral-400">
                   <div>时长：{s.durationMs ? msToClock(s.durationMs) : "—"}</div>
                   <div>分辨率：{s.width ? `${s.width}×${s.height}` : "—"}</div>

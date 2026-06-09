@@ -126,6 +126,40 @@ func extractAudioHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"out": req.Out})
 }
 
+// ---- /clip （按时间区间切出单个片段，供前端下载/预览）----
+
+func clipHandler(c *gin.Context) {
+	var req struct {
+		Input   string `json:"input" binding:"required"`
+		StartMs int64  `json:"startMs"`
+		EndMs   int64  `json:"endMs" binding:"required"`
+		Out     string `json:"out" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(req.Out), 0o755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	heavySem <- struct{}{}
+	defer func() { <-heavySem }()
+
+	ss := fmt.Sprintf("%.3f", float64(req.StartMs)/1000.0)
+	dur := fmt.Sprintf("%.3f", float64(req.EndMs-req.StartMs)/1000.0)
+	// 精确切割：重编码(片段短，开销可接受)，保留音频
+	args := []string{"-y", "-ss", ss, "-i", req.Input, "-t", dur, "-pix_fmt", "yuv420p"}
+	args = append(args, encoderArgs(Output{})...)
+	args = append(args, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", req.Out)
+	logFFmpegCmd(args)
+	if _, err := runOut(ffmpegBin, args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"out": req.Out})
+}
+
 // ---- /beat （卡点节拍，aubio；缺失则降级空数组）----
 
 func beatHandler(c *gin.Context) {

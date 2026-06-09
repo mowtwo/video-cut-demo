@@ -1,4 +1,4 @@
-import { DragHandleDots2Icon, PlayIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { DownloadIcon, DragHandleDots2Icon, PlayIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { useEffect, useRef, useState } from "react";
 import { api, asset, type ClipDTO, type ProjectBundle } from "../api.js";
 import { msToClock, msToSecLabel } from "../lib/format.js";
@@ -160,12 +160,21 @@ export function Clips({
             <div className="space-y-1 p-2 text-[11px] text-neutral-400">
               <div>时长 {msToSecLabel(c.durationMs)} · {msToClock(c.startMs)}–{msToClock(c.endMs)}</div>
               <div className="flex items-center justify-between pt-1">
-                <button
-                  onClick={() => setPreview(c)}
-                  className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 hover:bg-neutral-700"
-                >
-                  <PlayIcon /> 预览
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setPreview(c)}
+                    className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 hover:bg-neutral-700"
+                  >
+                    <PlayIcon /> 预览
+                  </button>
+                  <a
+                    href={`/api/projects/${projectId}/clips/${c.id}/download`}
+                    className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 hover:bg-neutral-700"
+                    title="下载该片段"
+                  >
+                    <DownloadIcon />
+                  </a>
+                </div>
                 <label className="flex items-center gap-1">
                   <input type="checkbox" checked={c.included} onChange={() => toggle(c)} />
                   选用

@@ -110,6 +110,11 @@ export function getSource(id: string): Source | null {
   return r ? rowToSource(r) : null;
 }
 
+export function deleteSource(id: string): void {
+  // clips 通过外键 ON DELETE CASCADE 一并删除
+  db().prepare("DELETE FROM sources WHERE id=?").run(id);
+}
+
 export function listSources(projectId: string): Source[] {
   const rows = db()
     .prepare("SELECT * FROM sources WHERE project_id=? ORDER BY created_at ASC")
@@ -145,6 +150,11 @@ export function listClips(projectId: string): Clip[] {
     .prepare("SELECT * FROM clips WHERE project_id=? ORDER BY order_index ASC, start_ms ASC")
     .all(projectId) as any[];
   return rows.map(rowToClip);
+}
+
+export function getClip(id: string): Clip | null {
+  const r = db().prepare("SELECT * FROM clips WHERE id=?").get(id) as any;
+  return r ? rowToClip(r) : null;
 }
 
 export function deleteClips(projectId: string): void {
