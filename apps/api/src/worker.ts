@@ -1,4 +1,4 @@
-import { claimNextJob, emitEvent, finishJob, recoverStaleJobs, updateProject } from "./db.js";
+import { claimNextJob, emitEvent, finishJob, pruneJobEvents, recoverStaleJobs, updateProject } from "./db.js";
 import { handlers } from "./handlers.js";
 
 const WORKER_ID = `w-${process.pid}`;
@@ -10,6 +10,8 @@ let active = 0;
 export function startWorker() {
   recoverStaleJobs(); // 崩溃恢复：把租约过期的 running 退回 queued
   setInterval(tick, 300);
+  pruneJobEvents();
+  setInterval(() => pruneJobEvents(), 30 * 60_000); // 每 30min 清一次过期进度事件
   console.log("[worker] started", WORKER_ID, "concurrency", MAX_CONCURRENT);
 }
 

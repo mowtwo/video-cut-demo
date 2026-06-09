@@ -33,6 +33,7 @@ func renderHandler(c *gin.Context) {
 		return
 	}
 
+	clearProbeCache() // 每次渲染重新探测，避免读到过期信息
 	args, totalMs, cleanup, err := buildRenderArgs(&req.Spec, req.Out)
 	if cleanup != nil {
 		defer cleanup()
@@ -429,6 +430,7 @@ func speechTrackHandler(c *gin.Context) {
 		return
 	}
 
+	clearProbeCache()
 	var inputs []string
 	for _, seg := range req.Spec.Segments {
 		inputs = append(inputs,

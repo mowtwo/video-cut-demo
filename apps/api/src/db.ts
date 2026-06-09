@@ -280,6 +280,7 @@ export function claimNextJob(workerId: string): JobRow | null {
     .prepare(
       `UPDATE jobs SET status='running', worker_id=?, started_at=?, lease_until=?
        WHERE id = (SELECT id FROM jobs WHERE status='queued' ORDER BY priority DESC, created_at ASC LIMIT 1)
+         AND status='queued'
        RETURNING *`,
     )
     .get(workerId, now(), now() + 10 * 60_000) as any;
@@ -327,4 +328,9 @@ export function eventsSince(projectId: string, sinceId: number): any[] {
   return db()
     .prepare("SELECT * FROM job_events WHERE project_id=? AND id>? ORDER BY id ASC LIMIT 100")
     .all(projectId, sinceId) as any[];
+}
+
+/** 清理过期的进度事件，避免 job_events 无限增长(SSE 只关心最近的新事件)。 */
+export function pruneJobEvents(maxAgeMs = 60 * 60_000): void {
+  db().prepare("DELETE FROM job_events WHERE ts < ?").run(now() - maxAgeMs);
 }

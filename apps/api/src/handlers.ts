@@ -141,6 +141,14 @@ async function asrJob(job: JobRow) {
 
     const thumbRel = `thumbs/render-${renderId}.jpg`;
     updateRender(renderId, { outPath: burnedRel, thumbPath: thumbRel });
+
+    // 清理中间产物(无字幕原片 + 人声 wav + ass)，避免磁盘堆积
+    const { rm } = await import("node:fs/promises");
+    await Promise.allSettled([
+      rm(absIn, { force: true }),
+      rm(absPath(wavRel), { force: true }),
+      rm(absPath(assRel), { force: true }),
+    ]);
     setJobProgress(job.id, 1, "字幕已添加");
   } catch (e) {
     // 字幕是可选项，失败不影响已出片结果

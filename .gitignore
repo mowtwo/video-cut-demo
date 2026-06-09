@@ -26,6 +26,9 @@ data/
 # logs
 *.log
 
+# 原始演示视频(过大)，仓库只放压缩后的 demo.mp4
+demo.mov
+
 # os / editor
 .DS_Store
 .idea/

@@ -11,6 +11,12 @@ var (
 	probeStore = map[string]*ProbeResult{}
 )
 
+func clearProbeCache() {
+	probeMu.Lock()
+	probeStore = map[string]*ProbeResult{}
+	probeMu.Unlock()
+}
+
 func probeCached(path string) (*ProbeResult, error) {
 	probeMu.Lock()
 	if r, ok := probeStore[path]; ok {
