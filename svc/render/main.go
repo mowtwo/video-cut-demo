@@ -65,6 +65,7 @@ func main() {
 	r.POST("/beat", beatHandler)           // {path} -> {beatsMs:[...]} (无 aubio 则空)
 	r.POST("/render", renderHandler)       // {jobId,out,callbackUrl,spec} -> RenderResult
 	r.POST("/burnsub", burnSubHandler)     // {input,ass,out} -> 烧录字幕
+	r.POST("/extract-audio", extractAudioHandler) // {input,out} -> 16k 单声道 wav(给 ASR)
 
 	log.Printf("[render] listening on http://127.0.0.1:%s", port)
 	if err := r.Run("127.0.0.1:" + port); err != nil {

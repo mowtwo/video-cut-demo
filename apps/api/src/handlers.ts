@@ -116,8 +116,13 @@ async function asrJob(job: JobRow) {
   const absIn = absPath(r.outPath);
 
   try {
-    setJobProgress(job.id, 0.1, "转写中…");
-    const segs = await transcribe(absIn);
+    setJobProgress(job.id, 0.1, "提取音频…");
+    // 先用全功能 ffmpeg 抽成 16k 单声道 wav（容器内 whisper 对 wav 最稳）
+    const wavRel = `out/${renderId}.wav`;
+    await renderClient.extractAudio(absIn, absPath(wavRel));
+
+    setJobProgress(job.id, 0.2, "转写中…");
+    const segs = await transcribe(absPath(wavRel));
     if (!segs.length) { setJobProgress(job.id, 1, "无可识别语音，跳过字幕"); return; }
 
     const pr = await renderClient.probe(absIn);

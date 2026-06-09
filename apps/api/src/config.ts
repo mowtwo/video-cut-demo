@@ -11,8 +11,11 @@ export const config = {
   asrUrl: process.env.ASR_URL ?? "",
   asrModel: process.env.ASR_MODEL ?? "large-v3",
 
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  aiModel: process.env.AI_MODEL ?? "claude-sonnet-4-6",
+  // AI 可选项：provider 无关，走 OpenAI 兼容接口。
+  // 可接 OpenAI / Gemini(openai-compat) / DeepSeek / 本地 Ollama 等。
+  aiApiKey: process.env.AI_API_KEY ?? "",
+  aiBaseUrl: process.env.AI_BASE_URL ?? "https://api.openai.com/v1",
+  aiModel: process.env.AI_MODEL ?? "gpt-4o-mini",
 };
 
 export function dbPath() {

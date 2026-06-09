@@ -102,6 +102,30 @@ func parsePtsTimes(s string) []int64 {
 	return cuts
 }
 
+// ---- /extract-audio （转 16k 单声道 wav，供 ASR 稳定识别）----
+
+func extractAudioHandler(c *gin.Context) {
+	var req struct {
+		Input string `json:"input" binding:"required"`
+		Out   string `json:"out" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(req.Out), 0o755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	args := []string{"-y", "-i", req.Input, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", req.Out}
+	logFFmpegCmd(args)
+	if _, err := runOut(ffmpegBin, args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"out": req.Out})
+}
+
 // ---- /beat （卡点节拍，aubio；缺失则降级空数组）----
 
 func beatHandler(c *gin.Context) {

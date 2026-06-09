@@ -17,6 +17,9 @@ export interface ProjectBundle {
   renders: RenderDTO[];
 }
 
+/** 把后端返回的 /files/... 路径加上 /api 前缀，经 vite 代理打到 API 静态服务。 */
+export const asset = (u?: string | null): string | undefined => (u ? `/api${u}` : undefined);
+
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(`${res.status}: ${await res.text().catch(() => "")}`);
   return res.json() as Promise<T>;

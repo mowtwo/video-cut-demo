@@ -43,4 +43,7 @@ export const renderClient = {
 
   burnSub: (input: string, ass: string, out: string) =>
     post<{ outPath: string }>("/burnsub", { input, ass, out }, 30 * 60_000),
+
+  extractAudio: (input: string, out: string) =>
+    post<{ out: string }>("/extract-audio", { input, out }, 120_000),
 };

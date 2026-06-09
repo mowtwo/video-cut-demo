@@ -1,5 +1,6 @@
+import { UploadIcon, VideoIcon } from "@radix-ui/react-icons";
 import { useRef, useState } from "react";
-import { api, type ProjectBundle } from "../api.js";
+import { api, asset, type ProjectBundle } from "../api.js";
 import { msToClock } from "../lib/format.js";
 
 export function Upload({
@@ -60,7 +61,7 @@ export function Upload({
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />
-        <div className="text-4xl">⬆️</div>
+        <UploadIcon className="h-8 w-8 text-neutral-400" />
         <p className="mt-3 text-neutral-200">{uploading ? "上传并处理中…" : "点击或拖拽视频到此处上传"}</p>
         <p className="mt-1 text-xs text-neutral-500">支持多个视频 · 任意 ffmpeg 可读格式</p>
       </div>
@@ -71,10 +72,10 @@ export function Upload({
           {bundle.sources.map((s) => (
             <div key={s.id} className="flex gap-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
               {s.url ? (
-                <video src={s.url} controls className="h-40 w-72 rounded bg-black object-contain" />
+                <video src={asset(s.url)} controls className="h-40 w-72 rounded bg-black object-contain" />
               ) : (
-                <div className="flex h-40 w-72 items-center justify-center rounded bg-neutral-800 text-neutral-500">
-                  处理中…
+                <div className="flex h-40 w-72 items-center justify-center gap-2 rounded bg-neutral-800 text-neutral-500">
+                  <VideoIcon /> 处理中…
                 </div>
               )}
               <div className="flex-1 text-sm">

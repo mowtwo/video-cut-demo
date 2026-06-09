@@ -19,7 +19,7 @@ export async function transcribe(absInputPath: string): Promise<AsrSegment[]> {
   const { readFile } = await import("node:fs/promises");
   const buf = await readFile(absInputPath);
   const form = new FormData();
-  form.append("audio_file", new Blob([buf]), "input.mp4");
+  form.append("audio_file", new Blob([buf]), "audio.wav");
 
   const url = `${config.asrUrl.replace(/\/$/, "")}/asr?encode=true&task=transcribe&output=json`;
   const res = await fetch(url, { method: "POST", body: form, signal: AbortSignal.timeout(10 * 60_000) });

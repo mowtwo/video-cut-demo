@@ -1,7 +1,7 @@
 import type { Clip, RenderSpec } from "@vcd/shared";
 import { config } from "./config.js";
 
-export const aiAvailable = () => config.anthropicApiKey.length > 0;
+export const aiAvailable = () => config.aiApiKey.length > 0;
 
 /**
  * 用 AI 对 RenderSpec 做 refine / 按 prompt 重排。
@@ -29,25 +29,27 @@ export async function refineSpec(
     })),
   });
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  // OpenAI 兼容 /chat/completions（GPT / Gemini openai-compat / DeepSeek / Ollama 等通用）
+  const res = await fetch(`${config.aiBaseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": config.anthropicApiKey,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${config.aiApiKey}`,
     },
     body: JSON.stringify({
       model: config.aiModel,
-      max_tokens: 2000,
-      system: sys,
-      messages: [{ role: "user", content: user }],
+      temperature: 0.7,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: user },
+      ],
     }),
     signal: AbortSignal.timeout(60_000),
   });
-  if (!res.ok) throw new Error(`anthropic ${res.status}: ${await res.text().catch(() => "")}`);
+  if (!res.ok) throw new Error(`ai ${res.status}: ${await res.text().catch(() => "")}`);
 
   const data = (await res.json()) as any;
-  const text: string = data.content?.[0]?.text ?? "";
+  const text: string = data.choices?.[0]?.message?.content ?? "";
   const json = extractJson(text);
   const adjusted: Array<{ clipId: string; srcInMs?: number; srcDurMs?: number; targetDurMs?: number }> =
     json?.segments ?? [];
