@@ -1,44 +1,42 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { openDb } from "@vcd/db";
-import type { Capabilities } from "@vcd/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { config, dbPath } from "./config.js";
+import { mkdirSync } from "node:fs";
+import { relative } from "node:path";
+import { config, dbPath, paths } from "./config.js";
+import { registerRoutes } from "./routes.js";
+import { startWorker } from "./worker.js";
 
-// 启动即打开 DB（建表 + WAL）。后续路由会用到。
-const db = openDb(dbPath());
+// 打开 DB（建表 + 迁移 + WAL）
+openDb(dbPath());
+// 确保运行时目录存在
+for (const d of [paths.media(), paths.thumbs(), paths.out(), paths.assets()]) {
+  mkdirSync(d, { recursive: true });
+}
 
 const app = new Hono();
 app.use("*", logger());
 app.use("*", cors());
 
-app.get("/health", (c) =>
-  c.json({ ok: true, service: "api", ts: Date.now() }),
+app.get("/health", (c) => c.json({ ok: true, service: "api", ts: Date.now() }));
+
+// 静态服务运行时文件：/files/<relPath> -> data/<relPath>
+app.use(
+  "/files/*",
+  serveStatic({
+    root: relative(process.cwd(), config.dataDir) || ".",
+    rewriteRequestPath: (p) => p.replace(/^\/files/, ""),
+  }),
 );
 
-// 能力探测：前端据此决定是否显示 AI / 字幕 按钮
-app.get("/capabilities", (c) => {
-  const caps: Capabilities = {
-    ai: config.anthropicApiKey.length > 0,
-    asr: config.asrUrl.length > 0,
-    hwaccel: config.renderHwaccel,
-  };
-  return c.json(caps);
-});
+registerRoutes(app);
 
-// TODO(M1+): /projects, /sources, /clips, /render, /events(SSE)
+startWorker();
 
-const port = config.apiPort;
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: app.fetch, port: config.apiPort }, (info) => {
   console.log(`[api] listening on http://127.0.0.1:${info.port}`);
-  console.log(`[api] db: ${dbPath()}`);
+  console.log(`[api] data dir: ${config.dataDir}`);
 });
-
-// 优雅退出，确保 WAL 落盘
-for (const sig of ["SIGINT", "SIGTERM"] as const) {
-  process.on(sig, () => {
-    db.close();
-    process.exit(0);
-  });
-}

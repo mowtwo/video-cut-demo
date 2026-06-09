@@ -25,6 +25,7 @@ export const JobType = z.enum([
   "thumb",
   "segment",
   "analyze",
+  "beat",
   "render",
   "asr",
 ]);

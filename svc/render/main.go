@@ -1,6 +1,6 @@
 // svc/render —— ffmpeg 执行微服务 (Gin)。
-// M0: 健康检查 + /probe(真实 ffprobe) + /jobs/:id 占位。
-// 后续(M2/M3): /thumbnail /clip /scene /beat /render，进程池 + -progress 进度。
+// 无状态执行单元：probe / thumbnail / scene / beat / render。
+// 进程池限制并发；render 用 ffmpeg -progress 解析进度并回调 api。
 package main
 
 import (
@@ -8,13 +8,31 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
+// 重型 ffmpeg 任务的并发闸（避免 CPU 过订阅）。
+var heavySem chan struct{}
+
 func main() {
 	port := getenv("RENDER_PORT", "8790")
+
+	maxConc := envInt("RENDER_MAX_CONCURRENT", 0)
+	if maxConc <= 0 {
+		maxConc = runtime.NumCPU() / 4
+		if maxConc < 1 {
+			maxConc = 1
+		}
+	}
+	heavySem = make(chan struct{}, maxConc)
+	log.Printf("[render] heavy concurrency = %d", maxConc)
+
+	detectFilters()
+	log.Printf("[render] filters: drawtext=%v ass=%v", hasDrawtext, hasAss)
 
 	r := gin.Default()
 
@@ -23,22 +41,21 @@ func main() {
 			"ok":      true,
 			"service": "render",
 			"ffmpeg":  hasBin("ffmpeg"),
-			"ffprobe": hasBin("ffprobe"),
-			"aubio":   hasBin("aubiotrack"),
+			"ffprobe":  hasBin("ffprobe"),
+			"aubio":    hasBin("aubiotrack"),
+			"drawtext": hasDrawtext,
+			"ass":      hasAss,
+			"hwaccel":  getenv("RENDER_HWACCEL", "none"),
 			"ts":      time.Now().UnixMilli(),
 		})
 	})
 
-	// POST /probe {"path": "..."} -> ffprobe json
-	r.POST("/probe", probeHandler)
-
-	// 占位：作业状态查询（M3 接入进程池后返回真实进度）
-	r.GET("/jobs/:id", func(c *gin.Context) {
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"error": "not implemented yet",
-			"id":    c.Param("id"),
-		})
-	})
+	r.POST("/probe", probeHandler)         // {path} -> ProbeResult
+	r.POST("/thumbnail", thumbnailHandler) // {path, atMs, width, out} -> {path}
+	r.POST("/scene", sceneHandler)         // {path, threshold} -> {cutsMs:[...]}
+	r.POST("/beat", beatHandler)           // {path} -> {beatsMs:[...]} (无 aubio 则空)
+	r.POST("/render", renderHandler)       // {jobId,out,callbackUrl,spec} -> RenderResult
+	r.POST("/burnsub", burnSubHandler)     // {input,ass,out} -> 烧录字幕
 
 	log.Printf("[render] listening on http://127.0.0.1:%s", port)
 	if err := r.Run("127.0.0.1:" + port); err != nil {
@@ -46,38 +63,18 @@ func main() {
 	}
 }
 
-type probeReq struct {
-	Path string `json:"path" binding:"required"`
-}
-
-func probeHandler(c *gin.Context) {
-	var req probeReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if _, err := os.Stat(req.Path); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file not found: " + req.Path})
-		return
-	}
-
-	out, err := exec.Command(
-		"ffprobe", "-v", "quiet",
-		"-print_format", "json",
-		"-show_format", "-show_streams",
-		req.Path,
-	).Output()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "ffprobe failed: " + err.Error()})
-		return
-	}
-
-	c.Data(http.StatusOK, "application/json", out)
-}
-
 func getenv(k, def string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
+	}
+	return def
+}
+
+func envInt(k string, def int) int {
+	if v := os.Getenv(k); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return def
 }

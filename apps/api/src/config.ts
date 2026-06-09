@@ -18,3 +18,19 @@ export const config = {
 export function dbPath() {
   return resolve(config.dataDir, "app.db");
 }
+
+import { join } from "node:path";
+export const paths = {
+  media: () => join(config.dataDir, "media"),
+  thumbs: () => join(config.dataDir, "thumbs"),
+  out: () => join(config.dataDir, "out"),
+  assets: () => join(config.dataDir, "assets"), // bgm / 字体等
+};
+
+export const callbackUrl = () =>
+  `http://127.0.0.1:${config.apiPort}/internal/progress`;
+
+// DB 里统一存「相对 dataDir 的路径」(如 "media/x.mp4")。
+// 落盘/调 render 用绝对路径；返回前端用 /files/ URL。
+export const absPath = (rel: string) => join(config.dataDir, rel);
+export const fileUrl = (rel: string | null) => (rel ? `/files/${rel}` : null);
